@@ -2,47 +2,56 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
 
-from app.dtos.models import Audi_Q4_40_CANSignal, CANSignal
+from app.dtos.models import Audi_Quattro_CAN_Signal
+from app.utils.signal_processor import append_physical_signals_to_dataframe_for_q4_etron
 
 CAPACITY_AT_BOL_kWh = 86
+Q4_ETRON_CAPACITY_AT_BOL_kWh = 76
 
 pio.renderers.default = "browser"
 
 
-def append_physical_signals_to_dataframe(df: pd.DataFrame) -> pd.DataFrame:
-    hv_battery_soc_mask = df["pid"] == CANSignal.MIN_CELL_SOC.pid
+def append_physical_signals_to_dataframe_for_quattro(df: pd.DataFrame) -> pd.DataFrame:
+    hv_battery_soc_mask = df["pid"] == Audi_Quattro_CAN_Signal.MIN_CELL_SOC.pid
     hv_battery_soc_raw = df.loc[hv_battery_soc_mask, "d4"]
     df.loc[hv_battery_soc_mask, "hv_battery_soc"] = (
-        hv_battery_soc_raw * CANSignal.MIN_CELL_SOC.scaling
+        hv_battery_soc_raw * Audi_Quattro_CAN_Signal.MIN_CELL_SOC.scaling
     )
 
-    hv_battery_voltage_mask = df["pid"] == CANSignal.HV_BATTERY_VOLTAGE.pid
+    hv_battery_voltage_mask = (
+        df["pid"] == Audi_Quattro_CAN_Signal.HV_BATTERY_VOLTAGE.pid
+    )
     hv_battery_voltage_raw = df["d4"] * 256 + df["d5"]
     df.loc[hv_battery_voltage_mask, "hv_battery_voltage"] = (
-        hv_battery_voltage_raw * CANSignal.HV_BATTERY_VOLTAGE.scaling
+        hv_battery_voltage_raw * Audi_Quattro_CAN_Signal.HV_BATTERY_VOLTAGE.scaling
     )
 
-    hv_battery_current_mask = df["pid"] == CANSignal.HV_BATTERY_CURRENT.pid
+    hv_battery_current_mask = (
+        df["pid"] == Audi_Quattro_CAN_Signal.HV_BATTERY_CURRENT.pid
+    )
     hv_battery_current_raw = df["d6"]
     df.loc[hv_battery_current_mask, "hv_battery_current"] = (
-        hv_battery_current_raw * CANSignal.HV_BATTERY_CURRENT.scaling
+        hv_battery_current_raw * Audi_Quattro_CAN_Signal.HV_BATTERY_CURRENT.scaling
     )
 
-    hv_battery_temperature_mask = df["pid"] == CANSignal.BMS_BATTERY_TEMPERATURE.pid
+    hv_battery_temperature_mask = (
+        df["pid"] == Audi_Quattro_CAN_Signal.BMS_BATTERY_TEMPERATURE.pid
+    )
     hv_battery_temperature_raw = df["d4"]
     df.loc[hv_battery_temperature_mask, "hv_battery_temperature"] = (
-        hv_battery_temperature_raw * CANSignal.BMS_BATTERY_TEMPERATURE.scaling
-        + CANSignal.BMS_BATTERY_TEMPERATURE.offset
+        hv_battery_temperature_raw
+        * Audi_Quattro_CAN_Signal.BMS_BATTERY_TEMPERATURE.scaling
+        + Audi_Quattro_CAN_Signal.BMS_BATTERY_TEMPERATURE.offset
     )
 
     hv_battery_current_energy_capacity_mask = (
-        df["pid"] == CANSignal.HV_BATTERY_CURRENT_ENERGY_CAPACITY.pid
+        df["pid"] == Audi_Quattro_CAN_Signal.HV_BATTERY_CURRENT_ENERGY_CAPACITY.pid
     )
     hv_battery_current_energy_raw = df["d5"] * 256 + df["d6"]
     df.loc[hv_battery_current_energy_capacity_mask, "hv_battery_current_energy"] = (
         hv_battery_current_energy_raw
-        * CANSignal.HV_BATTERY_CURRENT_ENERGY_CAPACITY.scaling
-        + CANSignal.HV_BATTERY_CURRENT_ENERGY_CAPACITY.offset
+        * Audi_Quattro_CAN_Signal.HV_BATTERY_CURRENT_ENERGY_CAPACITY.scaling
+        + Audi_Quattro_CAN_Signal.HV_BATTERY_CURRENT_ENERGY_CAPACITY.offset
     )
 
     soc_ffill = df["hv_battery_soc"].ffill()  # still in %
@@ -62,45 +71,70 @@ def append_physical_signals_to_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def append_physical_signals_to_dataframe_for_q4_etron(df: pd.DataFrame) -> pd.DataFrame:
-    hv_battery_soc_mask = df["pid"] == Audi_Q4_40_CANSignal.MIN_CELL_SOC.pid
-    hv_battery_soc_raw = df["d4"] * 256 + df["d5"]
-
-    df.loc[hv_battery_soc_mask, "hv_battery_soc"] = (
-        hv_battery_soc_raw * Audi_Q4_40_CANSignal.MIN_CELL_SOC.scaling
-    )
-
-    hv_battery_current_energy_capacity_mask = (
-        df["pid"] == Audi_Q4_40_CANSignal.HV_BATTERY_CURRENT_ENERGY_CAPACITY.pid
-    )
-    hv_battery_current_energy_raw = df["d5"] * 256 + df["d6"]
-    df.loc[hv_battery_current_energy_capacity_mask, "hv_battery_current_energy"] = (
-        hv_battery_current_energy_raw
-        * Audi_Q4_40_CANSignal.HV_BATTERY_CURRENT_ENERGY_CAPACITY.scaling
-        + Audi_Q4_40_CANSignal.HV_BATTERY_CURRENT_ENERGY_CAPACITY.offset
-    )
-
-    max_energy_capacity_mask = df["pid"] == Audi_Q4_40_CANSignal.MAX_ENERGY_CAPACITY.pid
-    max_energy_capacity_raw = (
-        df["d4"] * 16777216 + df["d5"] * 65536 + df["d6"] * 256 + df["d7"]
-    )
-    df.loc[max_energy_capacity_mask, "max_energy_capacity"] = (
-        max_energy_capacity_raw * Audi_Q4_40_CANSignal.MAX_ENERGY_CAPACITY.scaling
-        + Audi_Q4_40_CANSignal.MAX_ENERGY_CAPACITY.offset
-    )
-    return df
-    # ---------- NEW: estimated total capacity (kWh) ----------
-    # SOC is in %, convert to fraction, avoid div-by-zero
+"""
 
 
-def plot_signals_for_q4_etron(processed_df: pd.DataFrame) -> go.Figure:
+def build_dashboard_for_audi_q4(df: pd.DataFrame) -> go.Figure:
+    print(df["pid"].value_counts())
+
+    # 1) Decode signals (adds hv_battery_soc, hv_battery_current_energy, max_energy_capacity)
+    processed_df = append_physical_signals_to_dataframe_for_q4_etron(df).copy()
+
+    # ---- sanity check: make sure columns exist ----
+    required_cols = [
+        "hv_battery_soc",
+        "hv_battery_current_energy",
+        "max_energy_capacity",
+    ]
+    missing = [c for c in required_cols if c not in processed_df.columns]
+    if missing:
+        raise RuntimeError(f"Missing expected columns after decoding: {missing}")
+
+    # raw → kWh
+    processed_df["current_capacity_kwh"] = (
+        processed_df["hv_battery_current_energy"] / 1000.0
+    )
+    processed_df["max_capacity_kwh"] = processed_df["max_energy_capacity"] / 1000.0
+
+    # derived quantities
+    processed_df["soc_frac"] = processed_df["hv_battery_soc"] / 100.0
+
+    processed_df["estimated_capacity_kwh"] = pd.NA
+    mask_cap = (
+        processed_df["current_capacity_kwh"].notna()
+        & processed_df["soc_frac"].notna()
+        & (processed_df["soc_frac"] > 0)
+    )
+    processed_df.loc[mask_cap, "estimated_capacity_kwh"] = (
+        processed_df.loc[mask_cap, "current_capacity_kwh"]
+        / processed_df.loc[mask_cap, "soc_frac"]
+    )
+
+    processed_df["current_capacity_pct_bol"] = (
+        processed_df["current_capacity_kwh"] / Q4_ETRON_CAPACITY_AT_BOL_kWh * 100.0
+    )
+    processed_df["max_capacity_pct_bol"] = (
+        processed_df["max_capacity_kwh"] / Q4_ETRON_CAPACITY_AT_BOL_kWh * 100.0
+    )
+
+    processed_df["soh_estimated_pct"] = (
+        processed_df["estimated_capacity_kwh"] / Q4_ETRON_CAPACITY_AT_BOL_kWh * 100.0
+    )
+    processed_df["soh_energy_pct"] = (
+        processed_df["max_capacity_kwh"] / Q4_ETRON_CAPACITY_AT_BOL_kWh * 100.0
+    )
+
+    # 4) Series with non-NaNs
     soc_series = processed_df.dropna(subset=["hv_battery_soc"])
-    curr_cap_series = processed_df.dropna(subset=["hv_battery_current_energy"])
-    max_cap_series = processed_df.dropna(subset=["max_energy_capacity"])
+    curr_cap_series = processed_df.dropna(subset=["current_capacity_pct_bol"])
+    max_cap_series = processed_df.dropna(subset=["max_capacity_pct_bol"])
+    soh_est_series = processed_df.dropna(subset=["soh_estimated_pct"])
+    soh_energy_series = processed_df.dropna(subset=["soh_energy_pct"])
 
+    # 5) Plot
     fig = go.Figure()
 
-    # ---- 1. SOC on left axis ----
+    # SOC (left axis)
     fig.add_trace(
         go.Scatter(
             x=soc_series["time_offset_s"],
@@ -108,51 +142,99 @@ def plot_signals_for_q4_etron(processed_df: pd.DataFrame) -> go.Figure:
             mode="lines+markers",
             name="SOC (%)",
             yaxis="y",
-            hovertemplate="Time: %{x:.2f} min<br>SOC: %{y:.2f} %",
+            hovertemplate="SOC: %{y:.2f} %<br>Time: %{x:.2f} min<extra></extra>",
         )
     )
 
-    # ---- 2. Current capacity ----
+    # Current capacity % of BOL (+ kWh)
     fig.add_trace(
         go.Scatter(
             x=curr_cap_series["time_offset_s"],
-            y=curr_cap_series["hv_battery_current_energy"],
+            y=curr_cap_series["current_capacity_pct_bol"],
             mode="lines+markers",
-            name="Current capacity (kWh)",
+            name="Current capacity (% of BOL)",
             yaxis="y2",
-            visible=False,
-            hovertemplate="Time: %{x:.2f} min<br>Current cap: %{y:.2f} kWh",
+            customdata=curr_cap_series[["current_capacity_kwh"]].to_numpy(),
+            hovertemplate=(
+                "Current capacity: %{customdata[0]:.2f} kWh<br>"
+                "% of BOL: %{y:.2f} %<br>"
+                "Time: %{x:.2f} min"
+                "<extra></extra>"
+            ),
         )
     )
 
-    # ---- 3. Max capacity ----
+    # Max capacity % of BOL (+ kWh)
     fig.add_trace(
         go.Scatter(
             x=max_cap_series["time_offset_s"],
-            y=max_cap_series["max_energy_capacity"],
+            y=max_cap_series["max_capacity_pct_bol"],
             mode="lines+markers",
-            name="Max capacity (kWh)",
+            name="Max capacity (% of BOL)",
             yaxis="y2",
-            visible=True,
-            hovertemplate="Time: %{x:.2f} min<br>Max cap: %{y:.2f} kWh",
+            customdata=max_cap_series[["max_capacity_kwh"]].to_numpy(),
+            hovertemplate=(
+                "Max capacity: %{customdata[0]:.2f} kWh<br>"
+                "% of BOL: %{y:.2f} %<br>"
+                "Time: %{x:.2f} min"
+                "<extra></extra>"
+            ),
         )
     )
 
-    # ---- Axes ----
+    # SOH from max energy (derived from max_capacity_kwh)
+    fig.add_trace(
+        go.Scatter(
+            x=soh_energy_series["time_offset_s"],
+            y=soh_energy_series["soh_energy_pct"],
+            mode="lines+markers",
+            name="SOH based on max energy (% of BOL)",
+            yaxis="y2",
+            line=dict(dash="dash"),
+            customdata=soh_energy_series[["max_capacity_kwh"]].to_numpy(),
+            hovertemplate=(
+                "SOH (max energy): %{y:.2f} % of BOL<br>"
+                "Max capacity: %{customdata[0]:.2f} kWh<br>"
+                "Time: %{x:.2f} min"
+                "<extra></extra>"
+            ),
+        )
+    )
+
+    # SOH from estimated_capacity_kwh
+    fig.add_trace(
+        go.Scatter(
+            x=soh_est_series["time_offset_s"],
+            y=soh_est_series["soh_estimated_pct"],
+            mode="lines+markers",
+            name="SOH estimated (% of BOL)",
+            yaxis="y2",
+            line=dict(dash="dot"),
+            customdata=soh_est_series[["estimated_capacity_kwh"]].to_numpy(),
+            hovertemplate=(
+                "SOH (estimated): %{y:.2f} % of BOL<br>"
+                "Est. capacity: %{customdata[0]:.2f} kWh<br>"
+                "Time: %{x:.2f} min"
+                "<extra></extra>"
+            ),
+        )
+    )
+
+    # Optional vertical marker
+    t_mark = float(processed_df["time_offset_s"].median())
+    fig.add_vline(x=t_mark, line_dash="dot", line_color="gray")
+
     fig.update_layout(
+        title="Audi Q4 40 – SOC, Capacity & SOH (all in % of BOL)",
         xaxis=dict(
             title="Time (minutes)",
             showspikes=True,
             spikemode="across",
             spikesnap="cursor",
         ),
-        yaxis=dict(
-            title="SOC (%)",
-            side="left",
-            rangemode="tozero",
-        ),
+        yaxis=dict(title="SOC (%)", side="left"),
         yaxis2=dict(
-            title="Capacity (kWh)",
+            title="Capacity / SOH (% of BOL)",
             overlaying="y",
             side="right",
         ),
@@ -164,16 +246,17 @@ def plot_signals_for_q4_etron(processed_df: pd.DataFrame) -> go.Figure:
             xanchor="left",
             x=0,
         ),
-        title="Audi Q4 40 – SOC vs Current & Max Capacity",
     )
 
     fig.show()
     return fig
 
+"""
 
-def build_dashboard(df: pd.DataFrame) -> go.Figure:
+
+def build_dashboard_for_audi_quattro(df: pd.DataFrame) -> go.Figure:
     print(df["pid"].value_counts())
-    processed_dataframe = append_physical_signals_to_dataframe(df).copy()
+    processed_dataframe = append_physical_signals_to_dataframe_for_quattro(df).copy()
 
     soc_series = processed_dataframe.dropna(subset=["hv_battery_soc"])
     hv_battery_voltage_series = processed_dataframe.dropna(
