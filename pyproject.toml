@@ -1,0 +1,51 @@
+[tool.poetry]
+name = "battery-signals-visualizer"
+version = "0.1.0"
+description = "Visualize CAN data based on the logs"
+authors = ["Sharath Kuruppath <sharath.kuruppath@datavarde.se>"]
+readme = "README.md"
+packages = [{ include = "app" }]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<=3.14"
+python-can = ">=4.6.1,<5.0.0"
+plotly = ">=6.5.0,<7.0.0"
+pandas = ">=2.3.3,<3.0.0"
+pandas-stubs = "^2.3.2.250926"
+pydantic = "^2.12.5"
+
+[tool.poetry.group.dev.dependencies]
+black = "^25.11.0"
+mypy = "^1.18.2"
+flake8 = "^7.3.0"
+
+[tool.poetry.group.localdev]
+optional = true
+
+[tool.poetry.group.localdev.dependencies]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = [
+  "E203",  # Black-compatible slicing
+  "W503",  # Black’s operator breaks
+]
+exclude = [
+  ".venv",
+  "venv",
+  ".git",
+  "__pycache__",
+  ".mypy_cache",
+  ".ruff_cache",
+  "build",
+  "dist",
+]
