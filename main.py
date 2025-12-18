@@ -1,30 +1,37 @@
 from pathlib import Path
 
+from app.dtos.models import CarModel
 from app.utils.load_log_file import build_payload_column, load_log_file_into_dataframe
-from app.utils.plot_can_signals import (
-    build_dashboard_for_audi_quattro,
-)
 
-TRC_PATH = Path(
-    "Audi_e-tron_quattro_11-21_11-33-38_423_to_13_58_soc_74_to96_percent.trc"
-)
+from app.plots.plot_audi_q4 import build_dashboard_for_audi_q4
+from app.plots.plot_audi_quattro import build_dashboard_for_audi_quattro
+
+Audi_Quattro_Log_path = Path("app/logs/Audi_quattro_canedge.asc")
 
 
-AUDI_q4_LOG_PATH = Path("2025-12-02_11-50-39_847.trc")
+Audi_Q4_Log_Path = Path("app/logs/00000001_audi_q4_5th_dec_2025.asc")
 
 
 def main() -> None:
+    prompt = (
+        "Choose Car Models Available Options are\n"
+        " [1]: Audi Q4\n"
+        " [2]: Audi Quattro\n"
+        "Enter choice: "
+    )
 
-    df = load_log_file_into_dataframe(TRC_PATH)
-    # df = load_log_file_into_dataframe(AUDI_q4_LOG_PATH)
-    print(df["can_id"].unique())
-    # df_with_payload = build_payload_column(df)
-
-    # fig = build_dashboard(df)
-    fig = build_dashboard_for_audi_quattro(df)
-
-
-#  fig = build_dashboard_for_audi_q4(df)
+    chosen_car_model = CarModel(input(prompt).strip().lower())
+    print(f"you chose={chosen_car_model}")
+    match chosen_car_model:
+        case CarModel.Audi_Q4_40:
+            df = load_log_file_into_dataframe(Audi_Q4_Log_Path)
+            df_with_payload = build_payload_column(df)
+            build_dashboard_for_audi_q4(df_with_payload)
+        case CarModel.Audi_Quattro:
+            df = load_log_file_into_dataframe(Audi_Quattro_Log_path)
+            df_with_payload = build_payload_column(df)
+            # build_dashboard_for_audi_quattro(df_with_payload)
+            build_dashboard_for_audi_quattro(df_with_payload)
 
 
 if __name__ == "__main__":

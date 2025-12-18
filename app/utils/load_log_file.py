@@ -20,11 +20,11 @@ def extract_pid(can_message: can.Message) -> str | None:
         return None
 
 
-def _is_preconditions_to_load_data_successful(can_message: can.Message) -> bool:
+def valid_can_data(can_message: can.Message) -> bool:
     if can_message.is_error_frame or can_message.is_remote_frame:
         return False
 
-    if can_message.dlc < 4:
+    if can_message.dlc < 8:
         return False
 
     return True
@@ -38,7 +38,7 @@ def load_log_file_into_dataframe(log_file_path: Path) -> pd.DataFrame:
         for can_message in log_reader:
             pid = extract_pid(can_message)
 
-            if not _is_preconditions_to_load_data_successful(can_message):
+            if not valid_can_data(can_message):
                 continue
 
             data = list(can_message.data)

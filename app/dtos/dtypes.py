@@ -14,3 +14,8 @@ class Unit(str, Enum):
     CELSIUS = "°C"
     NO_UNIT = "No-Unit"
     KILOWATT_HOURS = "kWh"
+
+
+class CarModel(Enum):
+    Audi_Quattro = "Audi_Quattro"
+    Audi_Q4_E_tron = "Audi_Q4_E-tron"

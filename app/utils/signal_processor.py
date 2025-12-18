@@ -1,7 +1,12 @@
 import pandas as pd
 
 from app.dtos.dtypes import RawType
-from app.dtos.models import Audi_Q4_40_CANSignal, SignalDef
+from app.dtos.models import (
+    Audi_Q4_40_CANSignal,
+    Audi_Quattro_CAN_Signal,
+    SignalDef,
+    SignalEnum,
+)
 from app.utils.load_log_file import build_payload_column
 
 
@@ -36,12 +41,15 @@ def _compute_raw_from_payload(payload: list[int], sig: SignalDef) -> int:
             raise ValueError(f"Unsupported RawType: {sig.raw_type}")
 
 
-def append_physical_signals_to_dataframe_for_q4_etron(df: pd.DataFrame) -> pd.DataFrame:
+def append_physical_signals_to_dataframe(
+    df: pd.DataFrame, car_model: type[SignalEnum]
+) -> pd.DataFrame:
     df = df.copy()
-    if "payload" not in df.columns:
-        df = build_payload_column(df)
+    """
+    At this point df contains dlc,d0,d1,..d7,pid
+    """
 
-    for member in Audi_Q4_40_CANSignal:
+    for member in car_model:
         sig: SignalDef = member.value
         column_name = sig.column or member.name.lower()
 
@@ -58,7 +66,7 @@ def append_physical_signals_to_dataframe_for_q4_etron(df: pd.DataFrame) -> pd.Da
         did = (payload[1] << 8) | payload[2]
         did_hex = f"{did:04X}"
 
-        for member in Audi_Q4_40_CANSignal:
+        for member in car_model:
             sig: SignalDef = member.value
 
             if sig.pid != did_hex:
@@ -76,5 +84,3 @@ def append_physical_signals_to_dataframe_for_q4_etron(df: pd.DataFrame) -> pd.Da
             df.at[idx, col] = phys
 
     return df
-    # ---------- NEW: estimated total capacity (kWh) ----------
-    # SOC is in %, convert to fraction, avoid div-by-zero
