@@ -1,4 +1,6 @@
+import pandas as pd
 from app.dtos.models import PlotSignal
+import plotly.graph_objects as go
 
 
 def get_layout_y_axis_name(yaxis_name: str) -> str:
@@ -50,6 +52,71 @@ def set_axes_visibility_for_the_selected_signals(
 
     updates = {}
     for ax_key in axis_defs.keys():
-        updates[f"{ax_key}.visible"] = ax_key in used_layout_axes
+        axis_used = ax_key in used_layout_axes
+        updates[f"{ax_key}.visible"] = axis_used
+        updates[f"{ax_key}.showticklabels"] = axis_used
 
     return updates
+
+
+def create_traces_for_signals(
+    *,
+    df_with_physical_and_estimated_signals: pd.DataFrame,
+    signals_to_plot: list[PlotSignal],
+) -> tuple[go.Figure, dict[str, int], dict[str, list[float]]]:
+    """
+    In this method, individual dataframes containing time_offset_s and signals defined in the plot_signals are created
+    for example if the signal was defined like
+     PlotSignal(
+        key="soh_percent",
+        df_column="soh",
+        label="SOH (%)",
+        yaxis="y3",
+        ytitle="SOH (%)",
+    )
+    new dataframe is df[time_offset,soh]
+    these goes into plotly's go.scatter(xaxis=time_offset and yaxis=soh)
+    """
+
+    fig = go.Figure()
+
+    # Track which trace index corresponds to which signal key
+    trace_index: dict[str, int] = {}
+    y_axis_range: dict[str, list[float]] = {}
+
+    for plot_signal in signals_to_plot:
+        if plot_signal.df_column not in df_with_physical_and_estimated_signals.columns:
+            continue
+
+        df_signal_vs_time: pd.DataFrame = (
+            df_with_physical_and_estimated_signals[
+                ["time_offset_s", plot_signal.df_column]
+            ]
+            .dropna(subset=[plot_signal.df_column])
+            .copy()
+        )
+        if df_signal_vs_time.empty:
+            continue
+
+        cleaned_plot_signal = df_signal_vs_time[plot_signal.df_column].astype("float64")
+        y_axis_range[plot_signal.key] = (
+            plot_signal.range_fn(cleaned_plot_signal)
+            if plot_signal.range_fn
+            else [float(cleaned_plot_signal.min()), float(cleaned_plot_signal.max())]
+        )
+
+        trace_index[plot_signal.key] = len(fig.data)
+        fig.add_trace(
+            go.Scatter(
+                x=df_signal_vs_time["time_offset_s"],
+                y=cleaned_plot_signal,
+                mode="lines+markers",
+                name=plot_signal.label,
+                visible=(
+                    plot_signal.key == signals_to_plot[0].key
+                ),  # Make the first plot default
+                yaxis=plot_signal.yaxis,  # "y", "y2", ...
+                hovertemplate=f"Time: %{{x:.2f}} min<br>{plot_signal.label}: %{{y:{plot_signal.hover_yfmt}}}",
+            )
+        )
+    return fig, trace_index, y_axis_range

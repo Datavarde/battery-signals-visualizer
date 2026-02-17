@@ -2,7 +2,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
 
-from app.dtos.models import Audi_Q4_40_CANSignal, Audi_Quattro_CAN_Signal, SignalDef
+from app.dtos.audi_q4_40 import AUDI_Q4_40_Profile
+from app.dtos.audi_quattro import Audi_Quattro_Profile
 from app.utils.load_log_file import build_payload_column
 from app.utils.signal_processor import (
     _compute_raw_from_payload,
@@ -15,63 +16,99 @@ Q4_ETRON_CAPACITY_AT_BOL_kWh = 76
 pio.renderers.default = "browser"
 
 
-def build_dashboard_for_audi_q4(df: pd.DataFrame) -> None:
-    print(df["pid"].value_counts())
+def append_estimated_signals_for_audi_q4(
+    *, df_with_physical_signals: pd.DataFrame
+) -> pd.DataFrame:
 
-    # 1) Decode signals (adds hv_battery_soc, hv_battery_current_energy, max_energy_capacity)
-
-    processed_df = append_physical_signals_to_dataframe(df, Audi_Q4_40_CANSignal).copy()
-
+    df_with_estimated_signals_and_physical_signals = df_with_physical_signals.copy()
     # ---- sanity check: make sure columns exist ----
     required_cols = [
         "hv_battery_soc",
         "hv_battery_current_energy",
         "max_energy_capacity",
     ]
-    missing = [c for c in required_cols if c not in processed_df.columns]
+    missing = [
+        c
+        for c in required_cols
+        if c not in df_with_estimated_signals_and_physical_signals.columns
+    ]
     if missing:
         raise RuntimeError(f"Missing expected columns after decoding: {missing}")
 
     # raw → kWh
-    processed_df["current_capacity_kwh"] = (
-        processed_df["hv_battery_current_energy"] / 1000.0
+    df_with_estimated_signals_and_physical_signals["current_capacity_kwh"] = (
+        df_with_estimated_signals_and_physical_signals["hv_battery_current_energy"]
+        / 1000.0
     )
-    processed_df["max_capacity_kwh"] = processed_df["max_energy_capacity"] / 1000.0
+    df_with_estimated_signals_and_physical_signals["max_capacity_kwh"] = (
+        df_with_estimated_signals_and_physical_signals["max_energy_capacity"] / 1000.0
+    )
 
     # derived quantities
-    processed_df["soc_frac"] = processed_df["hv_battery_soc"] / 100.0
+    df_with_estimated_signals_and_physical_signals["soc_frac"] = (
+        df_with_estimated_signals_and_physical_signals["hv_battery_soc"] / 100.0
+    )
 
-    processed_df["estimated_capacity_kwh"] = pd.NA
+    df_with_estimated_signals_and_physical_signals["estimated_capacity_kwh"] = pd.NA
     mask_cap = (
-        processed_df["current_capacity_kwh"].notna()
-        & processed_df["soc_frac"].notna()
-        & (processed_df["soc_frac"] > 0)
+        df_with_estimated_signals_and_physical_signals["current_capacity_kwh"].notna()
+        & df_with_estimated_signals_and_physical_signals["soc_frac"].notna()
+        & (df_with_estimated_signals_and_physical_signals["soc_frac"] > 0)
     )
-    processed_df.loc[mask_cap, "estimated_capacity_kwh"] = (
-        processed_df.loc[mask_cap, "current_capacity_kwh"]
-        / processed_df.loc[mask_cap, "soc_frac"]
-    )
-
-    processed_df["current_capacity_pct_bol"] = (
-        processed_df["current_capacity_kwh"] / Q4_ETRON_CAPACITY_AT_BOL_kWh * 100.0
-    )
-    processed_df["max_capacity_pct_bol"] = (
-        processed_df["max_capacity_kwh"] / Q4_ETRON_CAPACITY_AT_BOL_kWh * 100.0
+    df_with_estimated_signals_and_physical_signals.loc[
+        mask_cap, "estimated_capacity_kwh"
+    ] = (
+        df_with_estimated_signals_and_physical_signals.loc[
+            mask_cap, "current_capacity_kwh"
+        ]
+        / df_with_estimated_signals_and_physical_signals.loc[mask_cap, "soc_frac"]
     )
 
-    processed_df["soh_estimated_pct"] = (
-        processed_df["estimated_capacity_kwh"] / Q4_ETRON_CAPACITY_AT_BOL_kWh * 100.0
+    df_with_estimated_signals_and_physical_signals["current_capacity_pct_bol"] = (
+        df_with_estimated_signals_and_physical_signals["current_capacity_kwh"]
+        / Q4_ETRON_CAPACITY_AT_BOL_kWh
+        * 100.0
     )
-    processed_df["soh_energy_pct"] = (
-        processed_df["max_capacity_kwh"] / Q4_ETRON_CAPACITY_AT_BOL_kWh * 100.0
+    df_with_estimated_signals_and_physical_signals["max_capacity_pct_bol"] = (
+        df_with_estimated_signals_and_physical_signals["max_capacity_kwh"]
+        / Q4_ETRON_CAPACITY_AT_BOL_kWh
+        * 100.0
     )
+
+    df_with_estimated_signals_and_physical_signals["soh_estimated_pct"] = (
+        df_with_estimated_signals_and_physical_signals["estimated_capacity_kwh"]
+        / Q4_ETRON_CAPACITY_AT_BOL_kWh
+        * 100.0
+    )
+    df_with_estimated_signals_and_physical_signals["soh_energy_pct"] = (
+        df_with_estimated_signals_and_physical_signals["max_capacity_kwh"]
+        / Q4_ETRON_CAPACITY_AT_BOL_kWh
+        * 100.0
+    )
+    return df_with_estimated_signals_and_physical_signals
+
+
+def build_dashboard_for_audi_q4(
+    *, df_with_estimated_and_physical_signals: pd.DataFrame
+) -> None:
+    print(df_with_estimated_and_physical_signals["pid"].value_counts())
 
     # 4) Series with non-NaNs
-    soc_series = processed_df.dropna(subset=["hv_battery_soc"])
-    curr_cap_series = processed_df.dropna(subset=["current_capacity_pct_bol"])
-    max_cap_series = processed_df.dropna(subset=["max_capacity_pct_bol"])
-    soh_est_series = processed_df.dropna(subset=["soh_estimated_pct"])
-    soh_energy_series = processed_df.dropna(subset=["soh_energy_pct"])
+    soc_series = df_with_estimated_and_physical_signals.dropna(
+        subset=["hv_battery_soc"]
+    )
+    curr_cap_series = df_with_estimated_and_physical_signals.dropna(
+        subset=["current_capacity_pct_bol"]
+    )
+    max_cap_series = df_with_estimated_and_physical_signals.dropna(
+        subset=["max_capacity_pct_bol"]
+    )
+    soh_est_series = df_with_estimated_and_physical_signals.dropna(
+        subset=["soh_estimated_pct"]
+    )
+    soh_energy_series = df_with_estimated_and_physical_signals.dropna(
+        subset=["soh_energy_pct"]
+    )
 
     # 5) Plot
     fig = go.Figure()
@@ -163,7 +200,7 @@ def build_dashboard_for_audi_q4(df: pd.DataFrame) -> None:
     )
 
     # Optional vertical marker
-    t_mark = float(processed_df["time_offset_s"].median())
+    t_mark = float(df_with_estimated_and_physical_signals["time_offset_s"].median())
     fig.add_vline(x=t_mark, line_dash="dot", line_color="gray")
 
     fig.update_layout(

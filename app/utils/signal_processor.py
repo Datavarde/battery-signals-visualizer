@@ -2,10 +2,8 @@ import pandas as pd
 
 from app.dtos.dtypes import RawType
 from app.dtos.models import (
-    Audi_Q4_40_CANSignal,
-    Audi_Quattro_CAN_Signal,
+    CarProfile,
     SignalDef,
-    SignalEnum,
 )
 from app.utils.load_log_file import build_payload_column
 
@@ -42,20 +40,18 @@ def _compute_raw_from_payload(payload: list[int], sig: SignalDef) -> int:
 
 
 def append_physical_signals_to_dataframe(
-    df: pd.DataFrame, car_model: type[SignalEnum]
+    *, df: pd.DataFrame, car_model: CarProfile
 ) -> pd.DataFrame:
     df = df.copy()
-    """
-    At this point df contains dlc,d0,d1,..d7,pid
-    """
 
-    for member in car_model:
-        sig: SignalDef = member.value
-        column_name = sig.column or member.name.lower()
-
+    signals: tuple[SignalDef, ...] = car_model.signals
+    # 1) Ensure output columns exist
+    for signal in signals:
+        column_name = signal.column
         # create empty column if missing
         if column_name not in df.columns:
             df[column_name] = pd.NA
+
     # walk each row that might have a completed UDS payload
     for idx, row in df.iterrows():
         payload = row["payload"]
@@ -66,21 +62,18 @@ def append_physical_signals_to_dataframe(
         did = (payload[1] << 8) | payload[2]
         did_hex = f"{did:04X}"
 
-        for member in car_model:
-            sig: SignalDef = member.value
-
-            if sig.pid != did_hex:
+        for signal in signals:
+            if signal.pid != did_hex:
                 continue
 
             # optional CAN-ID filter
-            if sig.can_id is not None and "can_id" in df.columns:
-                if int(row["can_id"]) != sig.can_id:
-                    continue
+            if signal.can_id != int(row["can_id"]):
+                continue
 
-            raw = _compute_raw_from_payload(payload, sig)
-            phys = raw * sig.scaling + sig.offset
+            raw = _compute_raw_from_payload(payload, signal)
+            phys = raw * signal.scaling + signal.offset
 
-            col = sig.column or member.name.lower()
-            df.at[idx, col] = phys
+            column: str = signal.column
+            df.at[idx, column] = phys
 
     return df

@@ -2,6 +2,9 @@ from pathlib import Path
 import pandas as pd
 import can
 
+from app.dtos.dtypes import CANFrameType
+from app.dtos.models import CarProfile
+
 
 def extract_pid(can_message: can.Message) -> str | None:
     data = can_message.data
@@ -24,38 +27,29 @@ def valid_can_data(can_message: can.Message) -> bool:
     if can_message.is_error_frame or can_message.is_remote_frame:
         return False
 
-    if can_message.dlc < 8:
-        return False
-
     return True
 
 
-def load_log_file_into_dataframe(log_file_path: Path) -> pd.DataFrame:
+def load_log_file_into_dataframe(
+    *, log_file_path: Path, can_ids_of_interest: set[int]
+) -> pd.DataFrame:
     rows = []
 
-    with can.LogReader(str(log_file_path)) as log_reader:
+    with can.TRCReader(str(log_file_path)) as log_reader:
 
         for can_message in log_reader:
-            pid = extract_pid(can_message)
-
             if not valid_can_data(can_message):
                 continue
 
-            data = list(can_message.data)
+            if can_message.arbitration_id not in can_ids_of_interest:
+                continue
+
             rows.append(
                 {
                     "time_s": can_message.timestamp,
                     "can_id": can_message.arbitration_id,
                     "dlc": can_message.dlc,
-                    "d0": data[0],
-                    "d1": data[1],
-                    "d2": data[2],
-                    "d3": data[3],
-                    "d4": data[4],
-                    "d5": data[5],
-                    "d6": data[6],
-                    "d7": data[7],
-                    "pid": pid,
+                    "data": list(can_message.data),
                 }
             )
         if not rows:
@@ -66,7 +60,7 @@ def load_log_file_into_dataframe(log_file_path: Path) -> pd.DataFrame:
         return df
 
 
-def build_payload_column(df: pd.DataFrame) -> pd.DataFrame:
+def build_payload_column(*, df: pd.DataFrame, car_model: CarProfile) -> pd.DataFrame:
     """
     Reassemble ISO-TP (SF/FF/CF) into canonical UDS payload.
 
@@ -77,46 +71,89 @@ def build_payload_column(df: pd.DataFrame) -> pd.DataFrame:
     """
     df = df.copy()
 
-    payloads: list[list[int] | None] = []
-    buffers: dict[int, list[int]] = {}
-    expected_len: dict[int, int] = {}
-
+    can_payload_without_iso_tp_and_extended_address: list[list[int] | None] = []
+    temp_buffer_to_append_raw_payload_bytes: dict[str, list[int]] = {}
+    expected_length_from_can_response: dict[str, int] = {}
+    unique_iso_tp_identifier: set[str] = set()
     for _, row in df.iterrows():
         can_id = int(row["can_id"])
-        d = [row[f"d{i}"] for i in range(0, 8)]
-        pci = d[0]
+        data = [int(x) for x in row["data"]]
 
-        # ---- Single Frame (SF) ----
-        if (pci >> 4) == 0x0:
-            length = pci & 0x0F
-            payload = d[1 : 1 + length]
-            payloads.append(payload)
-            buffers.pop(can_id, None)
-            expected_len.pop(can_id, None)
+        can_frame_info = car_model.frames.get(can_id)
+        if can_frame_info is None:
+            can_payload_without_iso_tp_and_extended_address.append(None)
             continue
 
-        # ---- First Frame (FF) ----
-        if (pci >> 4) == 0x1:
-            length = ((pci & 0x0F) << 8) | d[1]
-            buffers[can_id] = d[2:]  # first chunk of data
-            expected_len[can_id] = length
-            payloads.append(None)  # not complete yet
-            continue
+        if can_frame_info.is_extended_addressing_used:
+            if len(data) < 2:
+                can_payload_without_iso_tp_and_extended_address.append(None)
+                continue
 
-        # ---- Consecutive Frame (CF) ----
-        if (pci >> 4) == 0x2 and can_id in buffers:
-            buffers[can_id].extend(d[1:])
-            if len(buffers[can_id]) >= expected_len[can_id]:
-                payload = buffers[can_id][: expected_len[can_id]]
-                payloads.append(payload)  # final complete payload
-                buffers.pop(can_id, None)
-                expected_len.pop(can_id, None)
-            else:
-                payloads.append(None)  # still waiting for more
-            continue
+            extended_addressing_byte = data[0]
 
-        # ---- Anything else ----
-        payloads.append(None)
+            if (
+                can_frame_info.extended_address is not None
+                and extended_addressing_byte != can_frame_info.extended_address
+            ):
+                can_payload_without_iso_tp_and_extended_address.append(None)
+                continue
+            pci_idx = 1
+            iso_tp_identifier = f"{can_id:X}{extended_addressing_byte:X}"
+        else:
+            extended_addressing_byte = None
+            pci_idx = 0
+            iso_tp_identifier = f"{can_id:X}"
+        unique_iso_tp_identifier.add(iso_tp_identifier)
+        pci = data[pci_idx]
+        can_frame_type = (pci >> 4) & 0xF
 
-    df["payload"] = payloads
+        match CANFrameType(can_frame_type):
+            case CANFrameType.SINGLE_FRAME:
+                length = pci & 0x0F  # lower nibble for instance 0x07 -> 7 is the length
+                payload_start_idx = pci_idx + 1
+                payload = data[payload_start_idx : payload_start_idx + length]
+                can_payload_without_iso_tp_and_extended_address.append(payload)
+
+                temp_buffer_to_append_raw_payload_bytes.pop(iso_tp_identifier, None)
+                expected_length_from_can_response.pop(iso_tp_identifier, None)
+
+            case CANFrameType.FIRST_FRAME:
+                length = ((pci & 0x0F) << 8) | data[
+                    pci_idx + 1
+                ]  # lower nibble in the pci and then the length follows
+                temp_buffer_to_append_raw_payload_bytes[iso_tp_identifier] = data[
+                    pci_idx + 2 :
+                ]  # first chunk of data
+                expected_length_from_can_response[iso_tp_identifier] = length
+                can_payload_without_iso_tp_and_extended_address.append(
+                    None
+                )  # not complete yet
+
+            case CANFrameType.CONSECUTIVE_FRAME:
+                temp_buffer_to_append_raw_payload_bytes[iso_tp_identifier].extend(
+                    data[pci_idx + 1 :]
+                )
+                if (
+                    len(temp_buffer_to_append_raw_payload_bytes[iso_tp_identifier])
+                    >= expected_length_from_can_response[iso_tp_identifier]
+                ):
+                    payload = temp_buffer_to_append_raw_payload_bytes[
+                        iso_tp_identifier
+                    ][: expected_length_from_can_response[iso_tp_identifier]]
+                    can_payload_without_iso_tp_and_extended_address.append(
+                        payload
+                    )  # final complete payload
+
+                    temp_buffer_to_append_raw_payload_bytes.pop(iso_tp_identifier, None)
+                    expected_length_from_can_response.pop(iso_tp_identifier, None)
+                else:
+                    can_payload_without_iso_tp_and_extended_address.append(
+                        None
+                    )  # still waiting for more
+
+            case _:
+                can_payload_without_iso_tp_and_extended_address.append(None)
+
+    df["payload"] = can_payload_without_iso_tp_and_extended_address
+    df["payload"].dropna()
     return df

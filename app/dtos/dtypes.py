@@ -19,3 +19,9 @@ class Unit(str, Enum):
 class CarModel(Enum):
     Audi_Quattro = "Audi_Quattro"
     Audi_Q4_E_tron = "Audi_Q4_E-tron"
+
+
+class CANFrameType(Enum):
+    SINGLE_FRAME = 0x0
+    FIRST_FRAME = 0x1
+    CONSECUTIVE_FRAME = 0x2
