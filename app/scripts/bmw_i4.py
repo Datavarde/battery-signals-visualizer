@@ -10,7 +10,7 @@ from app.utils.signal_processor import append_physical_signals_to_dataframe
 
 def parse_bmw_i4_can_recording_and_plot_signal(*, log_file_path: Path) -> None:
     print(f"log chosen={log_file_path}")
-    log_name = log_file_path._cparts[-1].split(".")[0]
+    log_name = log_file_path.stem
     df = load_log_file_into_dataframe(
         log_file_path=log_file_path,
         can_ids_of_interest=BMW_I4_CAN_IDs_of_interest,

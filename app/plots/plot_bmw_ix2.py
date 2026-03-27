@@ -128,8 +128,10 @@ def build_dashboard_for_bmw_ix2(
     print(f"df_snapshot:{df_with_estimated_and_physical_signals.head(10)}")
     for signal_name in SIGNALS_TO_PRINT:
         print(
-            f"Min Limit for {signal_name}: {df_with_estimated_and_physical_signals[signal_name].min()}\n"
-            f"Max Limits for {signal_name}:{df_with_estimated_and_physical_signals[signal_name].max()}"
+            f"Min Limit for {signal_name}: "
+            f"{df_with_estimated_and_physical_signals[signal_name].min()}\n"
+            f"Max Limits for {signal_name}:"
+            f"{df_with_estimated_and_physical_signals[signal_name].max()}"
         )
 
     cols = [ps.df_column for ps in BMW_IX2_PLOT_SIGNALS]
@@ -149,7 +151,8 @@ def build_dashboard_for_bmw_ix2(
     buttons = []
 
     def pad_label(text: str, width: int = 26) -> str:
-        # regular spaces can get collapsed visually; NBSP is more reliable in Plotly labels
+        # regular spaces can get collapsed visually; NBSP is more reliable in
+        # Plotly labels
         return (text + "\u00a0" * width)[:width]
 
     for plot_signal in BMW_IX2_PLOT_SIGNALS:
@@ -175,7 +178,10 @@ def build_dashboard_for_bmw_ix2(
                             plot_signals=BMW_IX2_PLOT_SIGNALS,
                             axis_defs=axis_defs,
                         ),
-                        f"{get_layout_y_axis_name(plot_signal.yaxis)}.title.text": plot_signal.ytitle,
+                        (
+                            f"{get_layout_y_axis_name(plot_signal.yaxis)}"
+                            ".title.text"
+                        ): plot_signal.ytitle,
                         f"{get_layout_y_axis_name(plot_signal.yaxis)}.range": ranges[
                             plot_signal.key
                         ],

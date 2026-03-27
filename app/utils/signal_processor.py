@@ -1,3 +1,5 @@
+from typing import cast
+
 import pandas as pd
 
 from app.dtos.dtypes import RawType
@@ -5,7 +7,6 @@ from app.dtos.models import (
     CarProfile,
     SignalDef,
 )
-from app.utils.load_log_file import build_payload_column
 
 
 def _compute_raw_from_payload(payload: list[int], sig: SignalDef) -> int:
@@ -53,7 +54,7 @@ def append_physical_signals_to_dataframe(
             df[column_name] = pd.NA
 
     # walk each row that might have a completed UDS payload
-    for idx, row in df.iterrows():
+    for row_number, (_, row) in enumerate(df.iterrows()):
         payload = row["payload"]
         if not isinstance(payload, list) or len(payload) < 3:
             continue
@@ -74,6 +75,7 @@ def append_physical_signals_to_dataframe(
             phys = raw * signal.scaling + signal.offset
 
             column: str = signal.column
-            df.at[idx, column] = phys
+            column_index = cast(int, df.columns.get_loc(column))
+            df.iat[row_number, column_index] = phys
 
     return df

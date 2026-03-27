@@ -1,10 +1,8 @@
 import pandas as pd
 import plotly.graph_objects as go
-import plotly.io as pio
 from app.dtos.audi_quattro import (
     AUDI_QUATTRO_PLOT_SIGNALS,
     AUDI_E_TRON_QUATTRO_55_CAPACITY_AT_BOL_kWh,
-    AUDI_E_TRON_QUATTRO_50_CAPACITY_AT_BOL_kWh,
 )
 from app.utils.plot_helper import (
     create_traces_for_signals,
@@ -118,7 +116,8 @@ def append_estimated_signals_for_audi_quattro(
         .astype("Float64")
         .astype("float64")
     )
-    # soc values are lesser compared to current_energy , therefore there is forward filled data of soc
+    # soc values are lesser compared to current_energy , therefore there is
+    # forward filled data of soc
     soc_arr = soc_ffill.to_numpy()
     energy_arr = energy.to_numpy()
 
@@ -157,8 +156,10 @@ def build_dashboard_for_audi_quattro(
     print(f"df_snapshot:{df_with_estimated_and_physical_signals.head(10)}")
     for signal_name in SIGNALS_TO_PRINT:
         print(
-            f"Min Limit for {signal_name}: {df_with_estimated_and_physical_signals[signal_name].min()}\n"
-            f"Max Limits for {signal_name}:{df_with_estimated_and_physical_signals[signal_name].max()}"
+            f"Min Limit for {signal_name}: "
+            f"{df_with_estimated_and_physical_signals[signal_name].min()}\n"
+            f"Max Limits for {signal_name}:"
+            f"{df_with_estimated_and_physical_signals[signal_name].max()}"
         )
 
     cols = [ps.df_column for ps in AUDI_QUATTRO_PLOT_SIGNALS]
@@ -186,7 +187,8 @@ def build_dashboard_for_audi_quattro(
     buttons = []
 
     def pad_label(text: str, width: int = 26) -> str:
-        # regular spaces can get collapsed visually; NBSP is more reliable in Plotly labels
+        # regular spaces can get collapsed visually; NBSP is more reliable in
+        # Plotly labels
         return (text + "\u00a0" * width)[:width]
 
     # Build dropdown buttons (IMPORTANT: add "Combined" only once, after loop)
@@ -214,7 +216,10 @@ def build_dashboard_for_audi_quattro(
                             plot_signals=AUDI_QUATTRO_PLOT_SIGNALS,
                             axis_defs=axis_defs,
                         ),
-                        f"{get_layout_y_axis_name(plot_signal.yaxis)}.title.text": plot_signal.ytitle,
+                        (
+                            f"{get_layout_y_axis_name(plot_signal.yaxis)}"
+                            ".title.text"
+                        ): plot_signal.ytitle,
                         f"{get_layout_y_axis_name(plot_signal.yaxis)}.range": ranges[
                             plot_signal.key
                         ],

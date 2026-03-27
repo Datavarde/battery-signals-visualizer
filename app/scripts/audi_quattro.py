@@ -14,7 +14,7 @@ def parse_audi_quattro_can_recording_and_plot_signal(
     *, log_file_path: Path, usable_battery_capacity: int
 ) -> None:
     print(f"log chosen={log_file_path}")
-    log_name = log_file_path._cparts[-1].split(".")[0]
+    log_name = log_file_path.stem
     print(f"{log_name=}")
     df = load_log_file_into_dataframe(
         log_file_path=log_file_path,
@@ -27,7 +27,7 @@ def parse_audi_quattro_can_recording_and_plot_signal(
     df_with_estimated_and_physical_signals = append_estimated_signals_for_audi_quattro(
         df_with_physical_signals=df_with_physical_signals
     )
-    # build_dashboard_for_audi_quattro(df_with_payload)
+
     build_dashboard_for_audi_quattro(
         df_with_estimated_and_physical_signals=df_with_estimated_and_physical_signals,
         log_name=log_name,

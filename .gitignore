@@ -85,12 +85,9 @@ poetry.lock
 
 # --- Python byte-code ------------------------------------------
 *.py[cod]               # .pyc, .pyo, .pyd
-__pycache__/            # compiled-byte-code foldersclient_*.pem
-*/__pycache__/       
+*.pyc
+__pycache__/
+*/__pycache__/
 
 *Zone.Identifier
-
-
 *logs/
-*.pyc
-app/dtos/__pycache__/*

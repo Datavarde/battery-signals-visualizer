@@ -2,15 +2,6 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
 
-from app.dtos.audi_q4_40 import AUDI_Q4_40_Profile
-from app.dtos.audi_quattro import Audi_Quattro_Profile
-from app.utils.load_log_file import build_payload_column
-from app.utils.signal_processor import (
-    _compute_raw_from_payload,
-    append_physical_signals_to_dataframe,
-)
-
-
 Q4_ETRON_CAPACITY_AT_BOL_kWh = 76
 
 pio.renderers.default = "browser"

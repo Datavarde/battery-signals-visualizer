@@ -65,7 +65,8 @@ def create_traces_for_signals(
     signals_to_plot: list[PlotSignal],
 ) -> tuple[go.Figure, dict[str, int], dict[str, list[float]]]:
     """
-    In this method, individual dataframes containing time_offset_s and signals defined in the plot_signals are created
+    In this method, individual dataframes containing time_offset_s and signals
+    defined in the plot_signals are created
     for example if the signal was defined like
      PlotSignal(
         key="soh_percent",
@@ -98,7 +99,9 @@ def create_traces_for_signals(
         if df_signal_vs_time.empty:
             continue
 
-        cleaned_plot_signal = df_signal_vs_time[plot_signal.df_column].astype("float64")
+        cleaned_plot_signal = df_signal_vs_time[plot_signal.df_column].astype(
+            "float64"
+        )
         y_axis_range[plot_signal.key] = (
             plot_signal.range_fn(cleaned_plot_signal)
             if plot_signal.range_fn
@@ -116,7 +119,10 @@ def create_traces_for_signals(
                     plot_signal.key == signals_to_plot[0].key
                 ),  # Make the first plot default
                 yaxis=plot_signal.yaxis,  # "y", "y2", ...
-                hovertemplate=f"Time: %{{x:.2f}} min<br>{plot_signal.label}: %{{y:{plot_signal.hover_yfmt}}}",
+                hovertemplate=(
+                    f"Time: %{{x:.2f}} min<br>{plot_signal.label}: "
+                    f"%{{y:{plot_signal.hover_yfmt}}}"
+                ),
             )
         )
     return fig, trace_index, y_axis_range
